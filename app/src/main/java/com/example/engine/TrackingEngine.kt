@@ -242,18 +242,23 @@ object TrackingEngine {
     }
 
     fun tick() {
-        val now = if (sessionEndWallClock != 0L) pauseStartedTimeRealtime else android.os.SystemClock.elapsedRealtime()
-        val elapsedMs = if (_state.value.isActive) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val currentState = _state.value
+        val elapsedMs = if (currentState.isActive) {
             now - startTimeRealtime - accumulatedPausedTime
         } else {
-            if (startTimeRealtime == 0L) 0L else pauseStartedTimeRealtime - startTimeRealtime - accumulatedPausedTime
+            when {
+                startTimeRealtime == 0L -> 0L
+                pauseStartedTimeRealtime != 0L -> pauseStartedTimeRealtime - startTimeRealtime - accumulatedPausedTime
+                else -> currentState.elapsedSeconds * 1000L
+            }
         }
         val elapsedSec = (elapsedMs / 1000).coerceAtLeast(0L)
         
-        val pausedMs = if (_state.value.isActive) {
+        val pausedMs = if (currentState.isActive) {
             accumulatedPausedTime
         } else {
-            if (pauseStartedTimeRealtime == 0L) 0L else accumulatedPausedTime + (now - pauseStartedTimeRealtime)
+            if (pauseStartedTimeRealtime == 0L) accumulatedPausedTime else accumulatedPausedTime + (now - pauseStartedTimeRealtime)
         }
         val pausedSec = (pausedMs / 1000).coerceAtLeast(0L)
 

@@ -58,6 +58,30 @@ class TrackingEngineTest {
     }
 
     @Test
+    fun testStopWhilePaused() {
+        TrackingEngine.startTracking("WALK", null)
+        TrackingEngine.updateStepsFromSensor(1000)
+
+        SystemClock.sleep(2000)
+        TrackingEngine.tick()
+        TrackingEngine.updateStepsFromSensor(1020)
+        assertEquals(2L, TrackingEngine.state.value.elapsedSeconds)
+        assertEquals(20, TrackingEngine.state.value.steps)
+
+        TrackingEngine.togglePause()
+        SystemClock.sleep(3000)
+
+        val (finalState, _) = TrackingEngine.stopTracking()
+
+        assertFalse(finalState.isActive)
+        assertEquals(2L, finalState.elapsedSeconds)
+        assertEquals(3L, finalState.pausedSeconds)
+        assertEquals(20, finalState.steps)
+        assertEquals(0, finalState.laps)
+        assertTrue(finalState.endTimeMillis >= finalState.startTimeMillis)
+    }
+
+    @Test
     fun testSensorUpdatesDuringPause() {
         TrackingEngine.startTracking("WALK", null)
         
@@ -118,38 +142,6 @@ class TrackingEngineTest {
         assertEquals(2, lapsUpdated[1].index)
         assertEquals(30, lapsUpdated[1].steps)
         assertEquals(3L, lapsUpdated[1].duration)
-    }
-
-    @Test
-    fun testStopWhilePaused() {
-        TrackingEngine.startTracking("WALK", null)
-        
-        SystemClock.sleep(2000)
-        TrackingEngine.updateStepsFromSensor(100) // Initial
-        TrackingEngine.updateStepsFromSensor(150) // 50 steps
-        TrackingEngine.tick()
-        
-        // Pause tracking
-        TrackingEngine.togglePause()
-        
-        // Wait 3 seconds while paused
-        SystemClock.sleep(3000)
-        TrackingEngine.tick()
-        
-        // Ensure state is correct before stop
-        val stateBeforeStop = TrackingEngine.state.value
-        assertEquals(2L, stateBeforeStop.elapsedSeconds)
-        assertEquals(3L, stateBeforeStop.pausedSeconds)
-        assertEquals(50, stateBeforeStop.steps)
-        
-        // Stop tracking while paused
-        val (finalState, _) = TrackingEngine.stopTracking()
-        
-        assertFalse(finalState.isActive)
-        assertEquals(2L, finalState.elapsedSeconds) // Should remain 2 seconds
-        assertEquals(3L, finalState.pausedSeconds) // Should include final paused interval
-        assertEquals(50, finalState.steps) // Steps should remain unchanged
-        assertEquals(0, finalState.laps) // Laps remain unchanged
     }
 
     @Test

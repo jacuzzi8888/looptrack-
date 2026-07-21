@@ -1,6 +1,7 @@
 package com.example.data
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.PrimaryKey
 
 @Entity(tableName = "sessions")
@@ -16,8 +17,8 @@ data class Session(
     val distanceMetres: Float = 0f,
     val confidence: String = "HIGH", // HIGH, MEDIUM, LOW
     val distanceSource: String = "CALIBRATED_LOOP",
-    val startTimeMillis: Long = 0L,
-    val endTimeMillis: Long = 0L
+    @ColumnInfo(defaultValue = "0") val startTimeMillis: Long = 0L,
+    @ColumnInfo(defaultValue = "0") val endTimeMillis: Long = 0L
 )
 
 @Entity(tableName = "laps")
