@@ -58,6 +58,30 @@ class TrackingEngineTest {
     }
 
     @Test
+    fun testStopWhilePaused() {
+        TrackingEngine.startTracking("WALK", null)
+        TrackingEngine.updateStepsFromSensor(1000)
+
+        SystemClock.sleep(2000)
+        TrackingEngine.tick()
+        TrackingEngine.updateStepsFromSensor(1020)
+        assertEquals(2L, TrackingEngine.state.value.elapsedSeconds)
+        assertEquals(20, TrackingEngine.state.value.steps)
+
+        TrackingEngine.togglePause()
+        SystemClock.sleep(3000)
+
+        val (finalState, _) = TrackingEngine.stopTracking()
+
+        assertFalse(finalState.isActive)
+        assertEquals(2L, finalState.elapsedSeconds)
+        assertEquals(3L, finalState.pausedSeconds)
+        assertEquals(20, finalState.steps)
+        assertEquals(0, finalState.laps)
+        assertTrue(finalState.endTimeMillis >= finalState.startTimeMillis)
+    }
+
+    @Test
     fun testSensorUpdatesDuringPause() {
         TrackingEngine.startTracking("WALK", null)
         
