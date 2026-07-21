@@ -17,6 +17,7 @@ data class TrackingState(
     val mode: String = "WALK",
     val loopId: Int? = null,
     val elapsedSeconds: Long = 0,
+    val pausedSeconds: Long = 0,
     val laps: Int = 0,
     val validationLapsRequired: Int = 3,
     val steps: Int = 0,
@@ -24,7 +25,9 @@ data class TrackingState(
     val initialStepCount: Int = -1,
     val lastLapElapsedSeconds: Long = 0,
     val lastLapSteps: Int = 0,
-    val currentLocation: LocationPoint? = null
+    val currentLocation: LocationPoint? = null,
+    val startTimeMillis: Long = 0L,
+    val endTimeMillis: Long = 0L
 )
 
 data class LapRecord(
@@ -49,35 +52,98 @@ object TrackingEngine {
     private val lapRecords = mutableListOf<LapRecord>()
     private val locationSamples = mutableListOf<com.example.data.LocationSample>()
 
+    private var startTimeRealtime: Long = 0L
+    private var accumulatedPausedTime: Long = 0L
+    private var pauseStartedTimeRealtime: Long = 0L
+    private var sessionStartWallClock: Long = 0L
+    private var sessionEndWallClock: Long = 0L
+
+    private var activeStepsBeforeCurrentSegment: Int = 0
+    private var segmentStartSensorSteps: Int = -1
+    private var lastReceivedSensorSteps: Int = -1
+
     fun startTracking(mode: String, loopId: Int? = null) {
         lapRecords.clear()
         _lapRecordsFlow.value = emptyList()
         locationSamples.clear()
-        _state.update { 
-            TrackingState(
-                isActive = true, 
-                phase = if (loopId != null) "VALIDATION" else "ACTIVE",
-                mode = mode, 
-                loopId = loopId
-            ) 
-        }
+
+        startTimeRealtime = android.os.SystemClock.elapsedRealtime()
+        accumulatedPausedTime = 0L
+        pauseStartedTimeRealtime = 0L
+        sessionStartWallClock = System.currentTimeMillis()
+        sessionEndWallClock = 0L
+
+        activeStepsBeforeCurrentSegment = 0
+        segmentStartSensorSteps = -1
+        lastReceivedSensorSteps = -1
+
+        _state.value = TrackingState(
+            isActive = true,
+            phase = if (loopId != null) "VALIDATION" else "ACTIVE",
+            mode = mode,
+            loopId = loopId,
+            startTimeMillis = sessionStartWallClock
+        )
+
         startTimer()
     }
 
     fun togglePause() {
         val wasActive = _state.value.isActive
-        _state.update { it.copy(isActive = !wasActive) }
-        if (!wasActive) {
-            startTimer()
-        } else {
+        val now = android.os.SystemClock.elapsedRealtime()
+
+        if (wasActive) {
+            // Transition ACTIVE -> PAUSED
+            pauseStartedTimeRealtime = now
+            if (lastReceivedSensorSteps != -1 && segmentStartSensorSteps != -1) {
+                activeStepsBeforeCurrentSegment += (lastReceivedSensorSteps - segmentStartSensorSteps)
+            }
+            segmentStartSensorSteps = -1
+
+            _state.update { it.copy(isActive = false) }
             stopTimer()
+        } else {
+            // Transition PAUSED -> ACTIVE
+            val pausedDuration = now - pauseStartedTimeRealtime
+            accumulatedPausedTime += pausedDuration
+            pauseStartedTimeRealtime = 0L
+
+            segmentStartSensorSteps = lastReceivedSensorSteps
+
+            _state.update { it.copy(isActive = true) }
+            startTimer()
         }
+        tick()
     }
 
     fun stopTracking(): Pair<TrackingState, Pair<List<LapRecord>, List<com.example.data.LocationSample>>> {
         stopTimer()
-        _state.update { it.copy(isActive = false) }
-        return Pair(state.value, Pair(lapRecords.toList(), locationSamples.toList()))
+        val now = android.os.SystemClock.elapsedRealtime()
+
+        if (!_state.value.isActive && pauseStartedTimeRealtime != 0L) {
+            val pausedDuration = now - pauseStartedTimeRealtime
+            accumulatedPausedTime += pausedDuration
+            pauseStartedTimeRealtime = 0L
+        }
+
+        if (_state.value.isActive && lastReceivedSensorSteps != -1 && segmentStartSensorSteps != -1) {
+            activeStepsBeforeCurrentSegment += (lastReceivedSensorSteps - segmentStartSensorSteps)
+        }
+        segmentStartSensorSteps = -1
+
+        sessionEndWallClock = System.currentTimeMillis()
+
+        tick()
+
+        _state.update {
+            it.copy(
+                isActive = false,
+                endTimeMillis = sessionEndWallClock
+            )
+        }
+
+        val finalState = _state.value
+        return Pair(finalState, Pair(lapRecords.toList(), locationSamples.toList()))
     }
 
     private fun startTimer() {
@@ -129,12 +195,25 @@ object TrackingEngine {
     }
 
     fun updateStepsFromSensor(sensorSteps: Int) {
-        _state.update { 
-            val newSteps = if (it.initialStepCount == -1) 0 else sensorSteps - it.initialStepCount
-            val stride = if (it.mode == "WALK") 0.75f else 1.0f
+        lastReceivedSensorSteps = sensorSteps
+        val currentState = _state.value
+        if (!currentState.isActive) {
+            return
+        }
+
+        if (segmentStartSensorSteps == -1) {
+            segmentStartSensorSteps = sensorSteps
+        }
+
+        val activeStepsInSegment = (sensorSteps - segmentStartSensorSteps).coerceAtLeast(0)
+        val totalSteps = activeStepsBeforeCurrentSegment + activeStepsInSegment
+        val stride = if (currentState.mode == "WALK") 0.75f else 1.0f
+        val distance = totalSteps * stride
+
+        _state.update {
             it.copy(
-                steps = newSteps,
-                distanceMetres = newSteps * stride,
+                steps = totalSteps,
+                distanceMetres = distance,
                 initialStepCount = if (it.initialStepCount == -1) sensorSteps else it.initialStepCount
             )
         }
@@ -146,7 +225,7 @@ object TrackingEngine {
         
         locationSamples.add(
             com.example.data.LocationSample(
-                sessionId = 0, // Will be set before saving
+                sessionId = 0,
                 elapsedTime = currentState.elapsedSeconds,
                 latitude = lat,
                 longitude = lng,
@@ -162,6 +241,26 @@ object TrackingEngine {
     }
 
     fun tick() {
-        _state.update { it.copy(elapsedSeconds = it.elapsedSeconds + 1) }
+        val now = android.os.SystemClock.elapsedRealtime()
+        val elapsedMs = if (_state.value.isActive) {
+            now - startTimeRealtime - accumulatedPausedTime
+        } else {
+            if (startTimeRealtime == 0L) 0L else pauseStartedTimeRealtime - startTimeRealtime - accumulatedPausedTime
+        }
+        val elapsedSec = (elapsedMs / 1000).coerceAtLeast(0L)
+        
+        val pausedMs = if (_state.value.isActive) {
+            accumulatedPausedTime
+        } else {
+            if (pauseStartedTimeRealtime == 0L) 0L else accumulatedPausedTime + (now - pauseStartedTimeRealtime)
+        }
+        val pausedSec = (pausedMs / 1000).coerceAtLeast(0L)
+
+        _state.update {
+            it.copy(
+                elapsedSeconds = elapsedSec,
+                pausedSeconds = pausedSec
+            )
+        }
     }
 }

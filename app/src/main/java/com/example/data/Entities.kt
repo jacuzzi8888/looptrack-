@@ -15,7 +15,9 @@ data class Session(
     val totalSteps: Int = 0,
     val distanceMetres: Float = 0f,
     val confidence: String = "HIGH", // HIGH, MEDIUM, LOW
-    val distanceSource: String = "CALIBRATED_LOOP"
+    val distanceSource: String = "CALIBRATED_LOOP",
+    val startTimeMillis: Long = 0L,
+    val endTimeMillis: Long = 0L
 )
 
 @Entity(tableName = "laps")

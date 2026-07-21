@@ -19,7 +19,7 @@ class LoopTrackApp : Application() {
             AppDatabase::class.java,
             "looptrack_db"
         )
-        .fallbackToDestructiveMigration()
+        .addMigrations(AppDatabase.MIGRATION_2_3)
         .build()
         
         sessionRepository = SessionRepository(database.sessionDao())

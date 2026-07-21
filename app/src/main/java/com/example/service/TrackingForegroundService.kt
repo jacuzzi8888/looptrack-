@@ -91,10 +91,13 @@ class TrackingForegroundService : Service() {
                         state = "COMPLETED",
                         startElapsedTime = 0L,
                         endElapsedTime = finalState.elapsedSeconds,
+                        pausedDuration = finalState.pausedSeconds,
                         totalSteps = finalState.steps,
                         distanceMetres = finalState.distanceMetres,
                         confidence = "HIGH",
-                        distanceSource = if (finalState.loopId != null) "CALIBRATED_LOOP" else "FREE_TRACK"
+                        distanceSource = if (finalState.loopId != null) "CALIBRATED_LOOP" else "FREE_TRACK",
+                        startTimeMillis = finalState.startTimeMillis,
+                        endTimeMillis = finalState.endTimeMillis
                     )
                 )
                 

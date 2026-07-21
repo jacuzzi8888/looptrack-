@@ -36,7 +36,7 @@
             </intent-filter>
         </activity>
         <service
-            android:name=".TrackingForegroundService"
+            android:name="com.example.service.TrackingForegroundService"
             android:foregroundServiceType="location|health"
             android:exported="false" />
 
