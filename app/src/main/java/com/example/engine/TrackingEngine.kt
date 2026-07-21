@@ -27,7 +27,8 @@ data class TrackingState(
     val lastLapSteps: Int = 0,
     val currentLocation: LocationPoint? = null,
     val startTimeMillis: Long = 0L,
-    val endTimeMillis: Long = 0L
+    val endTimeMillis: Long = 0L,
+    val stepSource: String = "UNAVAILABLE"
 )
 
 data class LapRecord(
@@ -86,6 +87,36 @@ object TrackingEngine {
         )
 
         startTimer()
+    }
+
+    fun restoreFromCheckpoint(restoredState: TrackingState, restoredLapRecords: List<LapRecord>) {
+        stopTimer()
+
+        val now = android.os.SystemClock.elapsedRealtime()
+        val restoredPausedMs = restoredState.pausedSeconds * 1000L
+        startTimeRealtime = now - (restoredState.elapsedSeconds * 1000L) - restoredPausedMs
+        accumulatedPausedTime = restoredPausedMs
+        pauseStartedTimeRealtime = if (restoredState.isActive) 0L else now
+        sessionStartWallClock = restoredState.startTimeMillis
+        sessionEndWallClock = restoredState.endTimeMillis
+
+        activeStepsBeforeCurrentSegment = restoredState.steps
+        segmentStartSensorSteps = -1
+        lastReceivedSensorSteps = -1
+
+        lapRecords.clear()
+        lapRecords.addAll(restoredLapRecords)
+        _lapRecordsFlow.value = lapRecords.toList()
+        locationSamples.clear()
+        _state.value = restoredState
+
+        if (restoredState.isActive) {
+            startTimer()
+        }
+    }
+
+    fun checkpoint(): Pair<TrackingState, List<LapRecord>> {
+        return Pair(_state.value, lapRecords.toList())
     }
 
     fun togglePause() {
@@ -194,15 +225,16 @@ object TrackingEngine {
         }
     }
 
-    fun updateStepsFromSensor(sensorSteps: Int) {
+    fun updateStepsFromSensor(sensorSteps: Int, source: String = "STEP_COUNTER") {
         lastReceivedSensorSteps = sensorSteps
         val currentState = _state.value
         if (!currentState.isActive) {
+            _state.update { it.copy(stepSource = source) }
             return
         }
 
         if (segmentStartSensorSteps == -1) {
-            segmentStartSensorSteps = sensorSteps
+            segmentStartSensorSteps = if (source == "STEP_DETECTOR") 0 else sensorSteps
         }
 
         val activeStepsInSegment = (sensorSteps - segmentStartSensorSteps).coerceAtLeast(0)
@@ -214,7 +246,8 @@ object TrackingEngine {
             it.copy(
                 steps = totalSteps,
                 distanceMetres = distance,
-                initialStepCount = if (it.initialStepCount == -1) sensorSteps else it.initialStepCount
+                initialStepCount = if (it.initialStepCount == -1) sensorSteps else it.initialStepCount,
+                stepSource = source
             )
         }
     }
