@@ -1,0 +1,6 @@
+{
+  "name": "LoopTrack",
+  "description": "An Android pedometer and fitness app for repeated-loop walking and running.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
