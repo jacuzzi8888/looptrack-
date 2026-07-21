@@ -3,12 +3,14 @@ package com.example.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.R
+import com.example.data.TrackingCheckpointStore
 import com.example.engine.TrackingEngine
 import com.example.sensors.LocationGateway
 import com.example.sensors.SensorGateway
@@ -26,17 +28,25 @@ class TrackingForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var sensorGateway: SensorGateway
     private lateinit var locationGateway: LocationGateway
+    private lateinit var checkpointStore: TrackingCheckpointStore
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         sensorGateway = SensorGateway(this)
         locationGateway = LocationGateway(this)
+        checkpointStore = TrackingCheckpointStore(this)
+
+        val checkpoint = checkpointStore.load()
+        if (checkpoint != null && TrackingEngine.state.value.startTimeMillis == 0L) {
+            TrackingEngine.restoreFromCheckpoint(checkpoint.state, checkpoint.laps)
+        }
         
         try {
             sensorGateway.getSteps()
-                .onEach { steps ->
-                    TrackingEngine.updateStepsFromSensor(steps)
+                .onEach { reading ->
+                    TrackingEngine.updateStepsFromSensor(reading.totalSteps, reading.source.name)
+                    saveCheckpoint()
                 }
                 .launchIn(serviceScope)
         } catch (e: Exception) {
@@ -63,8 +73,9 @@ class TrackingForegroundService : Service() {
         serviceScope.launch {
             while (true) {
                 delay(1000)
-                if (TrackingEngine.state.value.isActive) {
+                if (TrackingEngine.state.value.startTimeMillis != 0L) {
                     try {
+                        saveCheckpoint()
                         updateNotification()
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -76,10 +87,25 @@ class TrackingForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
-        if (action == "STOP") {
+        if (action == ACTION_PAUSE) {
+            TrackingEngine.togglePause()
+            saveCheckpoint()
+            updateNotification()
+            return START_STICKY
+        }
+
+        if (action == ACTION_LAP) {
+            TrackingEngine.markLap()
+            saveCheckpoint()
+            updateNotification()
+            return START_STICKY
+        }
+
+        if (action == ACTION_STOP) {
             val (finalState, lapsAndLocations) = TrackingEngine.stopTracking()
             val laps = lapsAndLocations.first
             val locations = lapsAndLocations.second
+            saveCheckpoint()
             
             // Save to database
             val repository = (application as com.example.LoopTrackApp).sessionRepository
@@ -123,6 +149,7 @@ class TrackingForegroundService : Service() {
                     )
                 }
                 
+                checkpointStore.clear()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -179,7 +206,25 @@ class TrackingForegroundService : Service() {
             .setContentText(text)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
+            .addAction(R.mipmap.ic_launcher, if (state.isActive) "Pause" else "Resume", actionIntent(ACTION_PAUSE, 10))
+            .addAction(R.mipmap.ic_launcher, "Lap", actionIntent(ACTION_LAP, 11))
+            .addAction(R.mipmap.ic_launcher, "Stop", actionIntent(ACTION_STOP, 12))
             .build()
+    }
+
+    private fun saveCheckpoint() {
+        val (state, laps) = TrackingEngine.checkpoint()
+        if (state.startTimeMillis != 0L) {
+            checkpointStore.save(state, laps)
+        }
+    }
+
+    private fun actionIntent(action: String, requestCode: Int): PendingIntent {
+        val intent = Intent(this, TrackingForegroundService::class.java).apply {
+            this.action = action
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        return PendingIntent.getService(this, requestCode, intent, flags)
     }
     
     private fun formatTime(seconds: Long): String {
@@ -187,5 +232,11 @@ class TrackingForegroundService : Service() {
         val m = (seconds % 3600) / 60
         val s = seconds % 60
         return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
+    }
+
+    companion object {
+        const val ACTION_PAUSE = "com.example.service.action.PAUSE"
+        const val ACTION_LAP = "com.example.service.action.LAP"
+        const val ACTION_STOP = "com.example.service.action.STOP"
     }
 }

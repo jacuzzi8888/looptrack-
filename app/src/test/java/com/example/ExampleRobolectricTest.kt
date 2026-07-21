@@ -82,6 +82,45 @@ class TrackingEngineTest {
     }
 
     @Test
+    fun testRestoreFromCheckpoint() {
+        val restoredState = com.example.engine.TrackingState(
+            isActive = true,
+            phase = "ACTIVE",
+            mode = "WALK",
+            elapsedSeconds = 12L,
+            pausedSeconds = 3L,
+            laps = 1,
+            steps = 42,
+            distanceMetres = 31.5f,
+            lastLapElapsedSeconds = 10L,
+            lastLapSteps = 40,
+            startTimeMillis = System.currentTimeMillis() - 15000L,
+            stepSource = "STEP_COUNTER"
+        )
+        val restoredLaps = listOf(
+            com.example.engine.LapRecord(
+                index = 1,
+                startElapsedTime = 0L,
+                endElapsedTime = 10L,
+                steps = 40,
+                duration = 10L,
+                distance = 30f
+            )
+        )
+
+        TrackingEngine.restoreFromCheckpoint(restoredState, restoredLaps)
+
+        val state = TrackingEngine.state.value
+        assertTrue(state.isActive)
+        assertEquals(12L, state.elapsedSeconds)
+        assertEquals(3L, state.pausedSeconds)
+        assertEquals(1, state.laps)
+        assertEquals(42, state.steps)
+        assertEquals("STEP_COUNTER", state.stepSource)
+        assertEquals(1, TrackingEngine.lapRecordsFlow.value.size)
+    }
+
+    @Test
     fun testSensorUpdatesDuringPause() {
         TrackingEngine.startTracking("WALK", null)
         

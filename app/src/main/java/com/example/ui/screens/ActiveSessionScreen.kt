@@ -150,6 +150,14 @@ fun ActiveSessionScreen(
             val pace = if (totalDist > 0) (state.elapsedSeconds / (totalDist / 1000f)).toLong() else 0L
             MetricItem("PACE", if (pace > 0) "${formatTime(pace)}/km" else "--:--")
         }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Step source: ${state.stepSource.replace('_', ' ')}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         
         Spacer(modifier = Modifier.height(24.dp))
         
@@ -211,7 +219,7 @@ fun ActiveSessionScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 FilledIconButton(
-                    onClick = { TrackingEngine.togglePause() },
+                    onClick = { sendTrackingAction(context, TrackingForegroundService.ACTION_PAUSE) },
                     modifier = Modifier.size(64.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
@@ -219,7 +227,7 @@ fun ActiveSessionScreen(
                 }
                 
                 Button(
-                    onClick = { TrackingEngine.markLap() },
+                    onClick = { sendTrackingAction(context, TrackingForegroundService.ACTION_LAP) },
                     modifier = Modifier.size(100.dp, 64.dp),
                     shape = RoundedCornerShape(32.dp),
                     enabled = state.isActive
@@ -229,24 +237,7 @@ fun ActiveSessionScreen(
                 
                 FilledIconButton(
                     onClick = {
-                        try {
-                            val intent = Intent(context, TrackingForegroundService::class.java)
-                            intent.action = "STOP"
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                context.startForegroundService(intent)
-                            } else {
-                                context.startService(intent)
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            try {
-                                val intent = Intent(context, TrackingForegroundService::class.java)
-                                intent.action = "STOP"
-                                context.startService(intent)
-                            } catch (e2: Exception) {
-                                e2.printStackTrace()
-                            }
-                        }
+                        sendTrackingAction(context, TrackingForegroundService.ACTION_STOP)
                         onEndSession()
                     },
                     modifier = Modifier.size(64.dp),
@@ -272,4 +263,23 @@ private fun formatTime(seconds: Long): String {
     val m = (seconds % 3600) / 60
     val s = seconds % 60
     return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
+}
+
+private fun sendTrackingAction(context: android.content.Context, action: String) {
+    try {
+        val intent = Intent(context, TrackingForegroundService::class.java).apply {
+            this.action = action
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        val intent = Intent(context, TrackingForegroundService::class.java).apply {
+            this.action = action
+        }
+        context.startService(intent)
+    }
 }

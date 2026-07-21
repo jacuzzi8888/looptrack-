@@ -20,18 +20,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.example.LoopTrackApp
 import com.example.data.LoopProfile
+import com.example.sensors.SensorGateway
 import com.google.accompanist.permissions.*
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(onStartSession: (String, Int?) -> Unit, onNavigateToHistory: () -> Unit, onNavigateToLoops: () -> Unit) {
     val permissions = remember {
-        val list = mutableListOf(
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        )
+        val list = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             list.add(Manifest.permission.ACTIVITY_RECOGNITION)
         }
@@ -45,6 +44,11 @@ fun HomeScreen(onStartSession: (String, Int?) -> Unit, onNavigateToHistory: () -
     
     val context = LocalContext.current
     val repository = (context.applicationContext as LoopTrackApp).sessionRepository
+    val capabilities = remember { SensorGateway(context).getCapabilities() }
+    val hasLocationPermission = remember {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
     val profiles by repository.getAllLoopProfiles().collectAsState(initial = emptyList())
     var selectedProfile by remember { mutableStateOf<LoopProfile?>(null) }
     var expanded by remember { mutableStateOf(false) }
@@ -155,9 +159,9 @@ fun HomeScreen(onStartSession: (String, Int?) -> Unit, onNavigateToHistory: () -
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                SensorIndicator(icon = Icons.AutoMirrored.Filled.DirectionsWalk, label = "Steps", ready = true)
-                SensorIndicator(icon = Icons.Filled.Sensors, label = "Motion", ready = true)
-                SensorIndicator(icon = Icons.Filled.GpsFixed, label = "GPS", ready = true)
+                SensorIndicator(icon = Icons.AutoMirrored.Filled.DirectionsWalk, label = "Steps", ready = capabilities.hasStepCounter || capabilities.hasStepDetector)
+                SensorIndicator(icon = Icons.Filled.Sensors, label = "Motion", ready = capabilities.hasAccelerometer || capabilities.hasGyroscope)
+                SensorIndicator(icon = Icons.Filled.GpsFixed, label = "GPS", ready = capabilities.hasGps && hasLocationPermission)
                 SensorIndicator(icon = Icons.Filled.BatteryFull, label = "Battery", ready = true)
             }
             
