@@ -121,6 +121,38 @@ class TrackingEngineTest {
     }
 
     @Test
+    fun testStopWhilePaused() {
+        TrackingEngine.startTracking("WALK", null)
+        
+        SystemClock.sleep(2000)
+        TrackingEngine.updateStepsFromSensor(100) // Initial
+        TrackingEngine.updateStepsFromSensor(150) // 50 steps
+        TrackingEngine.tick()
+        
+        // Pause tracking
+        TrackingEngine.togglePause()
+        
+        // Wait 3 seconds while paused
+        SystemClock.sleep(3000)
+        TrackingEngine.tick()
+        
+        // Ensure state is correct before stop
+        val stateBeforeStop = TrackingEngine.state.value
+        assertEquals(2L, stateBeforeStop.elapsedSeconds)
+        assertEquals(3L, stateBeforeStop.pausedSeconds)
+        assertEquals(50, stateBeforeStop.steps)
+        
+        // Stop tracking while paused
+        val (finalState, _) = TrackingEngine.stopTracking()
+        
+        assertFalse(finalState.isActive)
+        assertEquals(2L, finalState.elapsedSeconds) // Should remain 2 seconds
+        assertEquals(3L, finalState.pausedSeconds) // Should include final paused interval
+        assertEquals(50, finalState.steps) // Steps should remain unchanged
+        assertEquals(0, finalState.laps) // Laps remain unchanged
+    }
+
+    @Test
     fun testStopAndReset() {
         TrackingEngine.startTracking("RUN", null)
         TrackingEngine.updateStepsFromSensor(5000)

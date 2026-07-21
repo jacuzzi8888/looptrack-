@@ -120,24 +120,25 @@ object TrackingEngine {
         stopTimer()
         val now = android.os.SystemClock.elapsedRealtime()
 
-        if (!_state.value.isActive && pauseStartedTimeRealtime != 0L) {
+        if (_state.value.isActive) {
+            pauseStartedTimeRealtime = now
+            if (lastReceivedSensorSteps != -1 && segmentStartSensorSteps != -1) {
+                activeStepsBeforeCurrentSegment += (lastReceivedSensorSteps - segmentStartSensorSteps)
+            }
+        } else if (pauseStartedTimeRealtime != 0L) {
             val pausedDuration = now - pauseStartedTimeRealtime
             accumulatedPausedTime += pausedDuration
-            pauseStartedTimeRealtime = 0L
+            pauseStartedTimeRealtime = now
         }
 
-        if (_state.value.isActive && lastReceivedSensorSteps != -1 && segmentStartSensorSteps != -1) {
-            activeStepsBeforeCurrentSegment += (lastReceivedSensorSteps - segmentStartSensorSteps)
-        }
         segmentStartSensorSteps = -1
-
         sessionEndWallClock = System.currentTimeMillis()
 
+        _state.update { it.copy(isActive = false) }
         tick()
 
         _state.update {
             it.copy(
-                isActive = false,
                 endTimeMillis = sessionEndWallClock
             )
         }
@@ -241,7 +242,7 @@ object TrackingEngine {
     }
 
     fun tick() {
-        val now = android.os.SystemClock.elapsedRealtime()
+        val now = if (sessionEndWallClock != 0L) pauseStartedTimeRealtime else android.os.SystemClock.elapsedRealtime()
         val elapsedMs = if (_state.value.isActive) {
             now - startTimeRealtime - accumulatedPausedTime
         } else {
