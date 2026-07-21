@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -41,7 +42,22 @@ interface SessionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLoopProfile(profile: LoopProfile): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCalibrationLap(lap: CalibrationLap)
+
+    @Transaction
+    suspend fun insertLoopProfileWithCalibration(profile: LoopProfile, calibrationLaps: List<CalibrationLap>): Long {
+        val profileId = insertLoopProfile(profile)
+        calibrationLaps.forEach { lap ->
+            insertCalibrationLap(lap.copy(loopProfileId = profileId.toInt()))
+        }
+        return profileId
+    }
     
     @Query("SELECT * FROM loop_profiles WHERE id = :id")
     suspend fun getLoopProfileById(id: Int): LoopProfile?
+
+    @Query("SELECT * FROM calibration_laps WHERE loopProfileId = :profileId ORDER BY `index` ASC")
+    fun getCalibrationLaps(profileId: Int): Flow<List<CalibrationLap>>
 }

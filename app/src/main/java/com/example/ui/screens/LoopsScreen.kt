@@ -15,17 +15,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.LoopTrackApp
 import com.example.data.LoopProfile
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoopsScreen(onBack: () -> Unit) {
+fun LoopsScreen(onBack: () -> Unit, onStartCalibration: () -> Unit) {
     val context = LocalContext.current
     val repository = (context.applicationContext as LoopTrackApp).sessionRepository
-    val scope = rememberCoroutineScope()
     
     val profiles by repository.getAllLoopProfiles().collectAsState(initial = emptyList())
-    var showAddDialog by remember { mutableStateOf(false) }
     
     Scaffold(
         topBar = {
@@ -44,7 +41,7 @@ fun LoopsScreen(onBack: () -> Unit) {
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
+                onClick = onStartCalibration,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
             ) {
@@ -63,7 +60,7 @@ fun LoopsScreen(onBack: () -> Unit) {
             if (profiles.isEmpty()) {
                 item {
                     Text(
-                        "No loops calibrated yet. Tap + to add one.", 
+                        "No loops calibrated yet. Tap + to calibrate one.", 
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp)
                     )
@@ -73,24 +70,6 @@ fun LoopsScreen(onBack: () -> Unit) {
             items(profiles) { profile ->
                 LoopProfileItem(profile)
             }
-        }
-        
-        if (showAddDialog) {
-            AddLoopDialog(
-                onDismiss = { showAddDialog = false },
-                onAdd = { name, distance ->
-                    scope.launch {
-                        repository.saveLoopProfile(
-                            LoopProfile(
-                                name = name,
-                                distanceMetres = distance,
-                                distanceSource = "KNOWN"
-                            )
-                        )
-                        showAddDialog = false
-                    }
-                }
-            )
         }
     }
 }
@@ -105,56 +84,14 @@ fun LoopProfileItem(profile: LoopProfile) {
             Text(profile.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Distance: ${profile.distanceMetres} m", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Source: ${profile.distanceSource}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${profile.mode}: ${profile.distanceMetres} m", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(profile.distanceConfidence, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("${profile.calibrationLapCount} calibration laps", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Avg ${profile.averageStepsPerLap.toInt()} steps / ${profile.averageDurationSeconds.toInt()}s", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
-}
-
-@Composable
-fun AddLoopDialog(onDismiss: () -> Unit, onAdd: (String, Float) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var distance by remember { mutableStateOf("") }
-    
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add Known Loop") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Loop Name (e.g. Home Circuit)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(
-                    value = distance,
-                    onValueChange = { distance = it },
-                    label = { Text("Distance (meters)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val distFloat = distance.toFloatOrNull() ?: 0f
-                    if (name.isNotBlank() && distFloat > 0f) {
-                        onAdd(name, distFloat)
-                    }
-                }
-            ) {
-                Text("Add")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
 }

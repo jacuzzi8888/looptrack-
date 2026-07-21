@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -18,7 +19,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [36])
 class MigrationTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val dbName = "migration-2-3-test.db"
+    private val dbName = "migration-2-4-test.db"
 
     @After
     fun tearDown() {
@@ -26,16 +27,18 @@ class MigrationTest {
     }
 
     @Test
-    fun testMigration2To3() = runTest {
+    fun testMigration2To4() = runTest {
         createVersion2Database()
 
         val database = Room.databaseBuilder(context, AppDatabase::class.java, dbName)
-            .addMigrations(AppDatabase.MIGRATION_2_3)
+            .addMigrations(AppDatabase.MIGRATION_2_3, AppDatabase.MIGRATION_3_4)
             .allowMainThreadQueries()
             .build()
 
         try {
             val session = database.sessionDao().getSessionById(1)
+            val profile = database.sessionDao().getAllLoopProfiles().first().single()
+            val calibrationLaps = database.sessionDao().getCalibrationLaps(profile.id).first()
 
             assertNotNull(session)
             assertEquals(1, session?.id)
@@ -43,6 +46,13 @@ class MigrationTest {
             assertEquals("COMPLETED", session?.state)
             assertEquals(0L, session?.startTimeMillis)
             assertEquals(0L, session?.endTimeMillis)
+            assertEquals("Home loop", profile.name)
+            assertEquals("WALK", profile.mode)
+            assertEquals("MEDIUM", profile.distanceConfidence)
+            assertEquals(0, profile.calibrationLapCount)
+            assertEquals(0f, profile.averageStepsPerLap, 0.001f)
+            assertEquals(0f, profile.averageDurationSeconds, 0.001f)
+            assertEquals(0, calibrationLaps.size)
         } finally {
             database.close()
         }
@@ -128,6 +138,17 @@ class MigrationTest {
                     `confidence`,
                     `distanceSource`
                 ) VALUES (1, NULL, 'WALK', 'COMPLETED', 0, 120, 10, 160, 120.0, 'HIGH', 'CALIBRATED_LOOP')
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT INTO `loop_profiles` (
+                    `id`,
+                    `name`,
+                    `distanceMetres`,
+                    `distanceSource`,
+                    `createdAt`
+                ) VALUES (1, 'Home loop', 32.0, 'KNOWN', 1710000000000)
                 """.trimIndent()
             )
             db.version = 2

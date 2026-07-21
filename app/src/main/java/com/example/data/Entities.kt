@@ -42,6 +42,26 @@ data class LoopProfile(
     val name: String,
     val distanceMetres: Float,
     val distanceSource: String, // "GPS", "KNOWN", "ESTIMATED"
+    @ColumnInfo(defaultValue = "'WALK'") val mode: String = "WALK",
+    @ColumnInfo(defaultValue = "'MEDIUM'") val distanceConfidence: String = "MEDIUM",
+    @ColumnInfo(defaultValue = "0") val calibrationLapCount: Int = 0,
+    @ColumnInfo(defaultValue = "0") val averageStepsPerLap: Float = 0f,
+    @ColumnInfo(defaultValue = "0") val averageDurationSeconds: Float = 0f,
+    val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "0") val updatedAt: Long = 0L,
+    @ColumnInfo(defaultValue = "0") val archivedAt: Long = 0L
+)
+
+@Entity(tableName = "calibration_laps")
+data class CalibrationLap(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val loopProfileId: Int,
+    val index: Int,
+    val mode: String,
+    val steps: Int,
+    val durationSeconds: Long,
+    val distanceMetres: Float,
+    val accepted: Boolean = true,
     val createdAt: Long = System.currentTimeMillis()
 )
 

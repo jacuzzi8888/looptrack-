@@ -11,6 +11,7 @@ import com.example.ui.screens.ActiveSessionScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.SessionDetailScreen
 import com.example.ui.screens.LoopsScreen
+import com.example.ui.screens.CalibrationScreen
 
 @Composable
 fun AppNavigation(
@@ -69,6 +70,16 @@ fun AppNavigation(
         }
         composable("loops") {
             LoopsScreen(
+                onBack = {
+                    navController.popBackStack()
+                },
+                onStartCalibration = {
+                    navController.navigate("calibration")
+                }
+            )
+        }
+        composable("calibration") {
+            CalibrationScreen(
                 onBack = {
                     navController.popBackStack()
                 }

@@ -35,6 +35,12 @@ class SessionRepository(private val sessionDao: SessionDao) {
     suspend fun saveLoopProfile(profile: LoopProfile): Int {
         return sessionDao.insertLoopProfile(profile).toInt()
     }
+
+    suspend fun saveLoopProfileWithCalibration(profile: LoopProfile, calibrationLaps: List<CalibrationLap>): Int {
+        return sessionDao.insertLoopProfileWithCalibration(profile, calibrationLaps).toInt()
+    }
     
     suspend fun getLoopProfileById(id: Int): LoopProfile? = sessionDao.getLoopProfileById(id)
+
+    fun getCalibrationLaps(profileId: Int): Flow<List<CalibrationLap>> = sessionDao.getCalibrationLaps(profileId)
 }

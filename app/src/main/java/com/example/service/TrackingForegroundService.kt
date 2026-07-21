@@ -155,6 +155,14 @@ class TrackingForegroundService : Service() {
             }
             return START_NOT_STICKY
         }
+
+        if (action == ACTION_CANCEL) {
+            TrackingEngine.stopTracking()
+            checkpointStore.clear()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         
         try {
             if (Build.VERSION.SDK_INT >= 34) {
@@ -238,5 +246,6 @@ class TrackingForegroundService : Service() {
         const val ACTION_PAUSE = "com.example.service.action.PAUSE"
         const val ACTION_LAP = "com.example.service.action.LAP"
         const val ACTION_STOP = "com.example.service.action.STOP"
+        const val ACTION_CANCEL = "com.example.service.action.CANCEL"
     }
 }
