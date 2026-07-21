@@ -3,194 +3,220 @@ package com.example.ui.screens
 import android.Manifest
 import android.os.Build
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
-import androidx.compose.material.icons.filled.BatteryFull
-import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Sensors
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Route
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.LoopTrackApp
 import com.example.data.LoopProfile
+import com.example.engine.TrackingEngine
 import com.example.sensors.SensorGateway
-import com.google.accompanist.permissions.*
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onStartSession: (String, Int?) -> Unit, onNavigateToHistory: () -> Unit, onNavigateToLoops: () -> Unit) {
-    val permissions = remember {
-        val list = mutableListOf<String>()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            list.add(Manifest.permission.ACTIVITY_RECOGNITION)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            list.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        list
-    }
-
-    val permissionState = rememberMultiplePermissionsState(permissions)
-    
+fun HomeScreen(
+    onStartSession: (String, Int?) -> Unit,
+    onNavigateToHistory: () -> Unit,
+    onNavigateToLoops: () -> Unit,
+    onNavigateToSettings: () -> Unit
+) {
     val context = LocalContext.current
+    val permissions = remember {
+        buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(Manifest.permission.ACTIVITY_RECOGNITION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    val permissionState = rememberMultiplePermissionsState(permissions)
     val repository = (context.applicationContext as LoopTrackApp).sessionRepository
+    val profiles by repository.getAllLoopProfiles().collectAsState(initial = emptyList())
+    val trackingState by TrackingEngine.state.collectAsState()
     val capabilities = remember { SensorGateway(context).getCapabilities() }
     val hasLocationPermission = remember {
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
-    val profiles by repository.getAllLoopProfiles().collectAsState(initial = emptyList())
     var selectedProfile by remember { mutableStateOf<LoopProfile?>(null) }
     var expanded by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+    Scaffold { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(padding),
+            contentPadding = PaddingValues(18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            IconButton(onClick = onNavigateToLoops) {
-                Icon(Icons.AutoMirrored.Filled.DirectionsRun, contentDescription = "Loops", tint = MaterialTheme.colorScheme.primary)
-            }
-            IconButton(onClick = onNavigateToHistory) {
-                Icon(Icons.Filled.History, contentDescription = "History", tint = MaterialTheme.colorScheme.primary)
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "LOOPTRACK", 
-            style = MaterialTheme.typography.displayMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.height(48.dp))
-
-        if (permissionState.allPermissionsGranted) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Button(
-                    onClick = { onStartSession("WALK", selectedProfile?.id) },
-                    modifier = Modifier.weight(1f).height(80.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = "Walk")
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Walk")
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Text("LoopTrack", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
+                        Text("Calibrated loop tracking", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                     }
-                }
-                
-                Button(
-                    onClick = { onStartSession("RUN", selectedProfile?.id) },
-                    modifier = Modifier.weight(1f).height(80.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.AutoMirrored.Filled.DirectionsRun, contentDescription = "Run")
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Run")
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Loop Selector
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = !expanded }
-            ) {
-                OutlinedTextField(
-                    value = selectedProfile?.name ?: "Free Track",
-                    onValueChange = {},
-                    readOnly = true,
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier.menuAnchor().fillMaxWidth(),
-                    label = { Text("Active Loop") }
-                )
-                
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Free Track") },
-                        onClick = { 
-                            selectedProfile = null
-                            expanded = false
+                    Row {
+                        IconButton(onClick = onNavigateToLoops) {
+                            Icon(Icons.Filled.Route, contentDescription = "Loops", tint = MaterialTheme.colorScheme.primary)
                         }
-                    )
-                    profiles.forEach { profile ->
-                        DropdownMenuItem(
-                            text = { Text(profile.name) },
-                            onClick = { 
-                                selectedProfile = profile
-                                expanded = false
-                            }
-                        )
+                        IconButton(onClick = onNavigateToHistory) {
+                            Icon(Icons.Filled.History, contentDescription = "History", tint = MaterialTheme.colorScheme.primary)
+                        }
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            // Sensor Readiness Row
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                SensorIndicator(icon = Icons.AutoMirrored.Filled.DirectionsWalk, label = "Steps", ready = capabilities.hasStepCounter || capabilities.hasStepDetector)
-                SensorIndicator(icon = Icons.Filled.Sensors, label = "Motion", ready = capabilities.hasAccelerometer || capabilities.hasGyroscope)
-                SensorIndicator(icon = Icons.Filled.GpsFixed, label = "GPS", ready = capabilities.hasGps && hasLocationPermission)
-                SensorIndicator(icon = Icons.Filled.BatteryFull, label = "Battery", ready = true)
+
+            if (trackingState.startTimeMillis != 0L && trackingState.endTimeMillis == 0L) {
+                item {
+                    LoopCard(modifier = Modifier.clickable { onStartSession(trackingState.mode, trackingState.loopId) }) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column {
+                                Text("Resume Session", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                                Text("${trackingState.mode} in progress", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(loopTrackTime(trackingState.elapsedSeconds), style = MaterialTheme.typography.headlineSmall)
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        SchematicLoop(progress = (trackingState.elapsedSeconds % 60) / 60f, modifier = Modifier.fillMaxWidth().height(90.dp))
+                    }
+                }
             }
-            
-        } else {
-            Text(
-                text = "We need permissions to track your workout.",
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { permissionState.launchMultiplePermissionRequest() }) {
-                Text("Grant Permissions")
+
+            item {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Button(
+                        onClick = { onStartSession("WALK", selectedProfile?.id) },
+                        modifier = Modifier.weight(1f).height(86.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("Start Walk")
+                        }
+                    }
+                    Button(
+                        onClick = { onStartSession("RUN", selectedProfile?.id) },
+                        modifier = Modifier.weight(1f).height(86.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.AutoMirrored.Filled.DirectionsRun, contentDescription = null)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text("Start Run")
+                        }
+                    }
+                }
+            }
+
+            item {
+                LoopCard {
+                    Text("Active loop", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+                        OutlinedTextField(
+                            value = selectedProfile?.name ?: "Free Track",
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
+                            label = { Text("Loop") }
+                        )
+                        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                            DropdownMenuItem(text = { Text("Free Track") }, onClick = {
+                                selectedProfile = null
+                                expanded = false
+                            })
+                            profiles.forEach { profile ->
+                                DropdownMenuItem(text = { Text("${profile.name} (${profile.mode})") }, onClick = {
+                                    selectedProfile = profile
+                                    expanded = false
+                                })
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = selectedProfile == null, onClick = { selectedProfile = null }, label = { Text("Free Track") })
+                        selectedProfile?.let { ConfidenceBadge(it.distanceConfidence) }
+                    }
+                }
+            }
+
+            item {
+                LoopCard {
+                    Text("Sensor readiness", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    StatusRow("Steps", if (capabilities.hasStepCounter) "Counter" else if (capabilities.hasStepDetector) "Detector" else "Missing", capabilities.hasStepCounter || capabilities.hasStepDetector)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    StatusRow("Motion", if (capabilities.hasAccelerometer || capabilities.hasGyroscope) "Ready" else "Limited", capabilities.hasAccelerometer || capabilities.hasGyroscope)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    StatusRow("GPS", if (hasLocationPermission) "Enabled" else "Optional", capabilities.hasGps)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    StatusRow("Battery", "Balanced", true)
+                }
+            }
+
+            if (!permissionState.allPermissionsGranted && permissions.isNotEmpty()) {
+                item {
+                    LoopCard {
+                        Text("Permissions needed", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.tertiary)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Grant activity and notification permissions before long tracking sessions.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(onClick = { permissionState.launchMultiplePermissionRequest() }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Grant Permissions")
+                        }
+                    }
+                }
             }
         }
-    }
-}
-
-@Composable
-fun SensorIndicator(icon: ImageVector, label: String, ready: Boolean) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (ready) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = label, 
-            style = MaterialTheme.typography.labelSmall,
-            color = if (ready) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }

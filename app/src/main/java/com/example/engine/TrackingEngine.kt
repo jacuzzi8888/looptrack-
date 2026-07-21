@@ -226,6 +226,17 @@ object TrackingEngine {
         }
     }
 
+    fun correctLapCount(newLapCount: Int) {
+        val correctedCount = newLapCount.coerceAtLeast(0)
+        _state.update {
+            it.copy(
+                laps = correctedCount,
+                lastLapElapsedSeconds = if (correctedCount == 0) 0L else it.lastLapElapsedSeconds,
+                lastLapSteps = if (correctedCount == 0) 0 else it.lastLapSteps
+            )
+        }
+    }
+
     fun updateStepsFromSensor(sensorSteps: Int, source: String = "STEP_COUNTER") {
         lastReceivedSensorSteps = sensorSteps
         val currentState = _state.value

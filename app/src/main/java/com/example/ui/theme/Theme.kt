@@ -9,19 +9,22 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
     primary = PrimaryNeon,
     secondary = SecondaryNeon,
     background = DarkBackground,
     surface = DarkSurface,
-    onPrimary = DarkBackground,
-    onSecondary = DarkBackground,
+    onPrimary = Color(0xFF031006),
+    onSecondary = Color.White,
     onBackground = OnDarkSurface,
     onSurface = OnDarkSurface,
-    surfaceVariant = Color(0xFF2A2A2A),
-    onSurfaceVariant = TextGray
+    surfaceVariant = DarkSurfaceHigh,
+    onSurfaceVariant = TextGray,
+    error = DangerRed,
+    errorContainer = Color(0xFF3A1717),
+    onErrorContainer = Color(0xFFFFDAD6),
+    tertiary = WarningAmber
 )
 
 @Composable

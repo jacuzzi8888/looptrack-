@@ -2,29 +2,59 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.os.Build
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.LoopTrackApp
+import com.example.data.LoopProfile
 import com.example.engine.TrackingEngine
 import com.example.service.TrackingForegroundService
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActiveSessionScreen(
     mode: String,
@@ -35,251 +65,185 @@ fun ActiveSessionScreen(
     val repository = (context.applicationContext as LoopTrackApp).sessionRepository
     val state by TrackingEngine.state.collectAsState()
     val laps by TrackingEngine.lapRecordsFlow.collectAsState()
-    
-    var loopName by remember { mutableStateOf("Free Track") }
-    var loopDistance by remember { mutableStateOf(0f) }
+    var profile by remember { mutableStateOf<LoopProfile?>(null) }
+    var showCorrection by remember { mutableStateOf(false) }
+    var correctedLaps by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(Unit) {
-        if (loopId != null) {
-            val profile = repository.getLoopProfileById(loopId)
-            if (profile != null) {
-                loopName = profile.name
-                loopDistance = profile.distanceMetres
-            }
-        }
-        
-        // Removed auto-start here. User must click START.
+    LaunchedEffect(loopId) {
+        profile = loopId?.let { repository.getLoopProfileById(it) }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(state.mode, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-            Text(loopName, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            
-            val phaseColor = if (state.phase == "VALIDATION") Color(0xFFFFB300) else Color(0xFF00E676)
-            Text(state.phase, style = MaterialTheme.typography.labelMedium, color = phaseColor)
-        }
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // Primary Metric
-        Text(
-            text = formatTime(state.elapsedSeconds),
-            style = MaterialTheme.typography.displayLarge,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Text("ELAPSED TIME", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        val progress = (state.elapsedSeconds % 60) / 60f 
-        
-        // Schematic Loop Visualization
-        Box(
+    val loopName = profile?.name ?: "Free Track"
+    val loopDistance = profile?.distanceMetres ?: 0f
+    val progress = (state.elapsedSeconds % 60) / 60f
+    val totalDistance = if (loopId != null && loopDistance > 0f) {
+        (state.laps * loopDistance) + (progress * loopDistance)
+    } else {
+        state.distanceMetres
+    }
+    val confidence = profile?.distanceConfidence ?: if (loopId == null) "LOW" else "MEDIUM"
+    val source = if (loopId == null) "Estimated / phone sensors" else "${profile?.distanceSource ?: "CALIBRATED"} loop"
+
+    Scaffold { padding ->
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp),
-            contentAlignment = Alignment.Center
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(padding)
+                .padding(18.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            val trackColor = MaterialTheme.colorScheme.surfaceVariant
-            val progressColor = MaterialTheme.colorScheme.primary
-            
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val strokeWidth = 12.dp.toPx()
-                val rectSize = Size(size.width - strokeWidth * 2, size.height - strokeWidth * 2)
-                val cornerRadius = rectSize.height / 2
-                
-                // Track Background
-                drawRoundRect(
-                    color = trackColor,
-                    topLeft = Offset(strokeWidth, strokeWidth),
-                    size = rectSize,
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius, cornerRadius),
-                    style = Stroke(width = strokeWidth)
-                )
-                
-                // Track Progress
-                drawArc(
-                    color = progressColor,
-                    startAngle = 90f,
-                    sweepAngle = 360f * progress,
-                    useCenter = false,
-                    topLeft = Offset(strokeWidth, strokeWidth),
-                    size = Size(cornerRadius * 2, cornerRadius * 2),
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                )
-            }
-            if (state.phase == "VALIDATION") {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("${state.laps} / ${state.validationLapsRequired} LAPS", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
-                    Text("VALIDATION PHASE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text(loopName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text("${state.mode.ifBlank { mode }} / $source", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            } else {
-                Text("${state.laps} LAPS", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+                Icon(Icons.Filled.Lock, contentDescription = "Foreground tracking", tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        }
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // Metrics Grid
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            MetricItem("STEPS", state.steps.toString())
-            
-            val totalDist = if (loopId != null && loopDistance > 0) {
-                // Calibrated distance calculation
-                (state.laps * loopDistance) + (progress * loopDistance)
-            } else {
-                state.distanceMetres
+
+            LoopCard {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                    MetricTile("Elapsed Time", loopTrackTime(state.elapsedSeconds), modifier = Modifier.weight(1f))
+                    MetricTile("Distance", String.format("%.2f km", totalDistance / 1000f), modifier = Modifier.weight(1f), supporting = "km")
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    MetricTile("Laps", state.laps.toString(), modifier = Modifier.weight(1f))
+                    MetricTile("Steps", state.steps.toString(), modifier = Modifier.weight(1f), supporting = state.stepSource.replace('_', ' '))
+                    val pace = if (totalDistance > 0f) (state.elapsedSeconds / (totalDistance / 1000f)).toLong() else 0L
+                    MetricTile("Pace", if (pace > 0) "${loopTrackTime(pace)}/km" else "--:--", modifier = Modifier.weight(1f))
+                }
             }
-            
-            MetricItem("DISTANCE", String.format("%.2f km", totalDist / 1000f))
-            
-            val pace = if (totalDist > 0) (state.elapsedSeconds / (totalDist / 1000f)).toLong() else 0L
-            MetricItem("PACE", if (pace > 0) "${formatTime(pace)}/km" else "--:--")
-        }
 
-        Spacer(modifier = Modifier.height(8.dp))
+            LoopCard {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Confidence", style = MaterialTheme.typography.titleMedium)
+                    ConfidenceBadge(confidence)
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                SchematicLoop(progress = progress, modifier = Modifier.fillMaxWidth().height(150.dp))
+                Text("Tap laps to correct the count. Distance uses confirmed laps for calibrated loops.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+            }
 
-        Text(
-            text = "Step source: ${state.stepSource.replace('_', ' ')}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        if (laps.isNotEmpty()) {
-            Column(modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
-                Text("LAPS", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.height(8.dp))
-                laps.takeLast(5).reversed().forEach { lap ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Lap ${lap.index}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(formatTime(lap.duration), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("${lap.steps} steps", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LoopCard(modifier = Modifier.clickable {
+                correctedLaps = state.laps
+                showCorrection = true
+            }) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column {
+                        Text("Lap correction", style = MaterialTheme.typography.titleMedium)
+                        Text("Recorded laps: ${state.laps}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    Text("Adjust", color = MaterialTheme.colorScheme.secondary)
                 }
             }
-        }
-        
-        Spacer(modifier = Modifier.weight(1f))
-        
-        // Controls
-        if (!state.isActive && state.elapsedSeconds == 0L) {
-            Button(
-                onClick = {
-                    TrackingEngine.startTracking(mode, loopId)
-                    try {
-                        val intent = Intent(context, TrackingForegroundService::class.java)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            context.startForegroundService(intent)
-                        } else {
-                            context.startService(intent)
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        try {
-                            val intent = Intent(context, TrackingForegroundService::class.java)
-                            context.startService(intent)
-                        } catch (e2: Exception) {
-                            e2.printStackTrace()
+
+            if (laps.isNotEmpty()) {
+                LoopCard {
+                    Text("Recent laps", style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    laps.takeLast(4).reversed().forEach { lap ->
+                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Lap ${lap.index}")
+                            Text(loopTrackTime(lap.duration), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${lap.steps} steps", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                },
-                modifier = Modifier.fillMaxWidth().height(64.dp),
-                shape = RoundedCornerShape(32.dp)
-            ) {
-                Text("START SESSION", style = MaterialTheme.typography.titleLarge)
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FilledIconButton(
-                    onClick = { sendTrackingAction(context, TrackingForegroundService.ACTION_PAUSE) },
-                    modifier = Modifier.size(64.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Icon(if (state.isActive) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = "Toggle", modifier = Modifier.size(32.dp))
                 }
-                
+            }
+
+            if (!state.isActive && state.elapsedSeconds == 0L) {
                 Button(
-                    onClick = { sendTrackingAction(context, TrackingForegroundService.ACTION_LAP) },
-                    modifier = Modifier.size(100.dp, 64.dp),
-                    shape = RoundedCornerShape(32.dp),
-                    enabled = state.isActive
-                ) {
-                    Text("LAP")
-                }
-                
-                FilledIconButton(
                     onClick = {
-                        sendTrackingAction(context, TrackingForegroundService.ACTION_STOP)
-                        onEndSession()
+                        TrackingEngine.startTracking(mode, loopId)
+                        startTrackingService(context)
                     },
-                    modifier = Modifier.size(64.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Icon(Icons.Filled.Stop, contentDescription = "Stop", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
+                    Text("Start Session", style = MaterialTheme.typography.titleMedium)
+                }
+            } else {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FilledIconButton(
+                        onClick = { sendTrackingAction(context, TrackingForegroundService.ACTION_PAUSE) },
+                        modifier = Modifier.weight(1f).height(68.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(if (state.isActive) Icons.Filled.Pause else Icons.Filled.PlayArrow, contentDescription = "Pause")
+                            Text(if (state.isActive) "Pause" else "Resume")
+                        }
+                    }
+                    Button(
+                        onClick = { sendTrackingAction(context, TrackingForegroundService.ACTION_LAP) },
+                        enabled = state.isActive,
+                        modifier = Modifier.weight(1f).height(68.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Filled.Flag, contentDescription = null)
+                            Text("Lap")
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            sendTrackingAction(context, TrackingForegroundService.ACTION_STOP)
+                            onEndSession()
+                        },
+                        modifier = Modifier.weight(1f).height(68.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Filled.Stop, contentDescription = null)
+                            Text("End")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showCorrection) {
+        ModalBottomSheet(onDismissRequest = { showCorrection = false }) {
+            Column(modifier = Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Lap Correction", style = MaterialTheme.typography.titleLarge)
+                Text("Adjust the confirmed lap count. This creates a visible correction in the session flow.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { correctedLaps = (correctedLaps - 1).coerceAtLeast(0) }, modifier = Modifier.size(58.dp)) {
+                        Icon(Icons.Filled.Remove, contentDescription = "Remove lap")
+                    }
+                    Text(correctedLaps.toString(), style = MaterialTheme.typography.displayMedium)
+                    OutlinedButton(onClick = { correctedLaps += 1 }, modifier = Modifier.size(58.dp)) {
+                        Icon(Icons.Filled.Add, contentDescription = "Add lap")
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton(onClick = { showCorrection = false }, modifier = Modifier.weight(1f)) {
+                        Text("Cancel")
+                    }
+                    Button(onClick = {
+                        TrackingEngine.correctLapCount(correctedLaps)
+                        showCorrection = false
+                    }, modifier = Modifier.weight(1f)) {
+                        Text("Save")
+                    }
                 }
             }
         }
     }
 }
 
-@Composable
-fun MetricItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-private fun formatTime(seconds: Long): String {
-    val h = seconds / 3600
-    val m = (seconds % 3600) / 60
-    val s = seconds % 60
-    return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
+private fun startTrackingService(context: android.content.Context) {
+    val intent = Intent(context, TrackingForegroundService::class.java)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
 }
 
 private fun sendTrackingAction(context: android.content.Context, action: String) {
-    try {
-        val intent = Intent(context, TrackingForegroundService::class.java).apply {
-            this.action = action
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent)
-        } else {
-            context.startService(intent)
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        val intent = Intent(context, TrackingForegroundService::class.java).apply {
-            this.action = action
-        }
-        context.startService(intent)
+    val intent = Intent(context, TrackingForegroundService::class.java).apply {
+        this.action = action
     }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent) else context.startService(intent)
 }

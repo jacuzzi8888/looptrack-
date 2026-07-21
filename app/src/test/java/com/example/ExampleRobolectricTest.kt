@@ -184,6 +184,16 @@ class TrackingEngineTest {
     }
 
     @Test
+    fun testManualLapCorrection() {
+        TrackingEngine.startTracking("WALK", null)
+        TrackingEngine.correctLapCount(4)
+        assertEquals(4, TrackingEngine.state.value.laps)
+
+        TrackingEngine.correctLapCount(-2)
+        assertEquals(0, TrackingEngine.state.value.laps)
+    }
+
+    @Test
     fun testStopAndReset() {
         TrackingEngine.startTracking("RUN", null)
         TrackingEngine.updateStepsFromSensor(5000)

@@ -1,7 +1,12 @@
 package com.example.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -12,17 +17,34 @@ import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.SessionDetailScreen
 import com.example.ui.screens.LoopsScreen
 import com.example.ui.screens.CalibrationScreen
+import com.example.ui.screens.OnboardingScreen
+import com.example.ui.screens.SettingsScreen
 
 @Composable
 fun AppNavigation(
     modifier: Modifier = Modifier,
     navController: NavHostController = rememberNavController()
 ) {
+    val context = LocalContext.current
+    val preferences = remember { context.getSharedPreferences("looptrack_ui", android.content.Context.MODE_PRIVATE) }
+    var onboardingComplete by remember { mutableStateOf(preferences.getBoolean("onboarding_complete", false)) }
+
     NavHost(
         navController = navController,
-        startDestination = "home",
+        startDestination = if (onboardingComplete) "home" else "onboarding",
         modifier = modifier
     ) {
+        composable("onboarding") {
+            OnboardingScreen(
+                onContinue = {
+                    preferences.edit().putBoolean("onboarding_complete", true).apply()
+                    onboardingComplete = true
+                    navController.navigate("home") {
+                        popUpTo("onboarding") { inclusive = true }
+                    }
+                }
+            )
+        }
         composable("home") {
             HomeScreen(
                 onStartSession = { mode, loopId ->
@@ -33,6 +55,9 @@ fun AppNavigation(
                 },
                 onNavigateToLoops = {
                     navController.navigate("loops")
+                },
+                onNavigateToSettings = {
+                    navController.navigate("settings")
                 }
             )
         }
@@ -80,6 +105,13 @@ fun AppNavigation(
         }
         composable("calibration") {
             CalibrationScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+        composable("settings") {
+            SettingsScreen(
                 onBack = {
                     navController.popBackStack()
                 }
