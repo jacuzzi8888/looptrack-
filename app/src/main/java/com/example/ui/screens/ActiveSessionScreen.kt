@@ -88,7 +88,7 @@ fun ActiveSessionScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .loopTrackBackground()
                 .padding(padding)
                 .padding(18.dp)
                 .verticalScroll(rememberScrollState()),

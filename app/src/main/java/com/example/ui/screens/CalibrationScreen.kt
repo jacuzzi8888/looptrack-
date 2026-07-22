@@ -87,7 +87,7 @@ fun CalibrationScreen(onBack: () -> Unit) {
         }
     ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(padding),
+            modifier = Modifier.fillMaxSize().loopTrackBackground().padding(padding),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {

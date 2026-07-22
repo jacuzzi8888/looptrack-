@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.os.Build
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,20 +22,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,8 +43,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.LoopTrackApp
@@ -87,17 +85,14 @@ fun HomeScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .loopTrackBackground()
                 .padding(padding),
             contentPadding = PaddingValues(18.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column {
-                        Text("LoopTrack", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.SemiBold)
-                        Text("Calibrated loop tracking", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                    }
+                    BrandLockup(subtitle = "Calibrated loop tracking")
                     Row {
                         IconButton(onClick = onNavigateToLoops) {
                             Icon(Icons.Filled.Route, contentDescription = "Loops", tint = MaterialTheme.colorScheme.primary)
@@ -130,29 +125,20 @@ fun HomeScreen(
 
             item {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(
+                    PremiumActionTile(
+                        label = "Start Walk",
+                        icon = Icons.AutoMirrored.Filled.DirectionsWalk,
                         onClick = { onStartSession("WALK", selectedProfile?.id) },
-                        modifier = Modifier.weight(1f).height(86.dp),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text("Start Walk")
-                        }
-                    }
-                    Button(
+                        modifier = Modifier.weight(1f).height(104.dp),
+                        accent = MaterialTheme.colorScheme.primary
+                    )
+                    PremiumActionTile(
+                        label = "Start Run",
+                        icon = Icons.AutoMirrored.Filled.DirectionsRun,
                         onClick = { onStartSession("RUN", selectedProfile?.id) },
-                        modifier = Modifier.weight(1f).height(86.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.AutoMirrored.Filled.DirectionsRun, contentDescription = null)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text("Start Run")
-                        }
-                    }
+                        modifier = Modifier.weight(1f).height(104.dp),
+                        accent = MaterialTheme.colorScheme.secondary
+                    )
                 }
             }
 
@@ -160,16 +146,24 @@ fun HomeScreen(
                 LoopCard {
                     Text("Active loop", style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(12.dp))
-                    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-                        OutlinedTextField(
-                            value = selectedProfile?.name ?: "Free Track",
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                            modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(),
-                            label = { Text("Loop") }
-                        )
-                        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.White.copy(alpha = 0.055f), RoundedCornerShape(12.dp))
+                                .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(12.dp))
+                                .clickable { expanded = true }
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Loop", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(selectedProfile?.name ?: "Free Track", style = MaterialTheme.typography.titleMedium)
+                            }
+                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Choose loop", tint = MaterialTheme.colorScheme.primary)
+                        }
+                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                             DropdownMenuItem(text = { Text("Free Track") }, onClick = {
                                 selectedProfile = null
                                 expanded = false

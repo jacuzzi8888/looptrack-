@@ -48,16 +48,15 @@ fun OnboardingScreen(onContinue: () -> Unit) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .loopTrackBackground()
                 .padding(padding),
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("LoopTrack", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary)
-                    Text("Repeated-loop walking and running, built around calibrated laps instead of noisy indoor GPS.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                BrandLockup(subtitle = "Repeated-loop tracking")
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Calibrated walking and running for small repeated routes, without pretending indoor GPS is exact.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
                 LoopCard {
